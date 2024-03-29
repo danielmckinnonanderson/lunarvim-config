@@ -1,151 +1,85 @@
--- ********
--- #GENERAL
--- ********
+-- General
 lvim.log.level = "warn"
 lvim.format_on_save.enabled = false
-lvim.builtin.alpha.active = true
-lvim.builtin.alpha.mode = "dashboard"
-lvim.builtin.terminal.active = false
 lvim.leader = "space"
-lvim.keys.normal_mode["<C-s>"] = ":w<cr>"
-vim.opt.relativenumber = true
 
+-- Appearance
+lvim.colorscheme = "zenburned"
+lvim.builtin.lualine.style = "default"
+lvim.builtin.lualine.options.theme = "gruvbox"
+lvim.builtin.lualine.sections.lualine_x = { "encoding", "filetype" }
 
--- ******
--- #THEME
--- ******
-lvim.colorscheme = "seoulbones"
-
--- tweak colors for specific schemes that I don't feel like forking
-if lvim.colorscheme == "seoulbones" then
-  vim.api.nvim_command([[
-    augroup ChangeBackgroundColour
-      autocmd colorscheme * :hi normal guibg=#232324
-    augroup END
-  ]])
-end
-
-
--- ********************* 
--- #OS-SPECIFIC-SETTINGS
--- ********************* 
-
--- Windows
-local function win_setup()
-
-  -- Function to use win32yank for clipboard stuff
-  local function win_use_winyank_clipboard()
-    vim.g.clipboard = {
-      copy = {
-        ["+"] = "win32yank.exe -i --crlf",
-        ["*"] = "win32yank.exe -i --crlf",
-      },
-      paste = {
-        ["+"] = "win32yank.exe -o --lf",
-        ["*"] = "win32yank.exe -o --lf",
-      },
-    }
-  end
-
-  -- Function to set Windows Powershell as default 
-  local function win_default_to_powershell()
-    vim.opt.shell = "pwsh.exe -NoLogo"
-    vim.opt.shellcmdflag =
-      "-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -Command [Console]::InputEncoding=[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;"
-    vim.cmd [[
-        let &shellredir = '2>&1 | Out-File -Encoding UTF8 %s; exit $LastExitCode'
-        let &shellpipe = '2>&1 | Out-File -Encoding UTF8 %s; exit $LastExitCode'
-        set shellquote= shellxquote=
-      ]]
-    lvim.builtin.terminal.shell = "pwsh.exe -NoLogo"
-  end
-
-  -- Function to address nvim-tree performance issues on Windows, see kyazdani42/nvim-tree.lua#549
-  local function win_improve_nvimtree_performance()
-    lvim.builtin.nvimtree.setup.diagnostics.enable = nil
-    lvim.builtin.nvimtree.setup.filters.custom = nil
-    lvim.builtin.nvimtree.setup.git.enable = nil
-    lvim.builtin.nvimtree.setup.update_cwd = nil
-    lvim.builtin.nvimtree.setup.update_focused_file.update_cwd = nil
-    lvim.builtin.nvimtree.setup.view.side = "left"
-    lvim.builtin.nvimtree.setup.renderer.highlight_git = nil
-    lvim.builtin.nvimtree.setup.renderer.icons.show.git = nil
-  end
-
-  win_default_to_powershell()
-  win_use_winyank_clipboard()
-  win_improve_nvimtree_performance()
-end
-
--- Nvim tree standard setup for use with Mac & Linux
-local function unix_nvim_tree_setup()
-  lvim.builtin.nvimtree.setup.view.side = "left"
-  lvim.builtin.nvimtree.setup.renderer.icons.show.git = false
-end
-
--- Linux
-local function linux_setup()
-  -- Fix weird visual bug causing buffer title to appear in line constantly
-  vim.opt.title = false
-
-  -- Only use transparent background plugin on Linux
-  require("transparent").setup({
-    enable = true,
-    extra_groups = {},
-    exclude = {},
-  })
-
-  unix_nvim_tree_setup()
-end
-
-local function mac_setup()
-  unix_nvim_tree_setup()
-end
-
-local sysname = vim.loop.os_uname().sysname
-
-if sysname == "Windows_NT" then
-  win_setup()
-elseif sysname == "Darwin" then
-  mac_setup()
-elseif sysname == "Linux" then
-  linux_setup()
-end
-
--- ***********
--- #TREESITTER
--- ***********
+-- Parsers
 lvim.builtin.treesitter.ensure_installed = {
+  "bash",
   "c",
+  "javascript",
   "lua",
+  "python",
+  "typescript",
+  "rust",
+  "yaml",
+  "java"
 }
 
-lvim.builtin.treesitter.highlight.enable = true
+-- Remaps / keybinds
+-- TODO - Create a keybind for LSP-reliant find & replace
 
+-- Github Co-Pilot remaps
+vim.api.nvim_set_keymap("i", "<C-l>", 'copilot#Accept("<CR>")', { silent = true, expr = true })
 
--- *************
--- #LSP-SETTINGS
--- *************
+-- Normal mode move up/down visual lines (in multi-line wrapped text)
+vim.api.nvim_set_keymap("n", "<C-j>", "gj", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<C-k>", "gk", { noremap = true, silent = true })
 
--- TODO - Custom func that determines the tab size per-language? Or perhaps a default with 
---        a few targeted overrides?
+-- Normal mode can wrap virtual error test in floating window
+vim.api.nvim_set_keymap("n", "g?", ":lua vim.diagnostic.open_float(nil, { scope = 'line' })<CR>", { noremap = true, silent = true })
 
+-- Normal mode jump to previous / next error lines
+vim.api.nvim_set_keymap("n", "geb", ":lua vim.diagnostic.goto_prev()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "gen", ":lua vim.diagnostic.goto_next()<CR>", { noremap = true, silent = true })
 
--- ******** 
--- #PLUGINS
--- ******** 
+-- File-dependent hooks
+-- Set 4-space indent for C/C++ files
+vim.api.nvim_create_autocmd('BufEnter', {
+  pattern = {'*.c', '*.cpp', '*.h', '*.hpp'},
+  command = 'setlocal shiftwidth=4 tabstop=4'
+})
+-- Prevent weird "offset encoding" bug w/ clang by silencing it (Linux only)
+local notify = vim.notify
+vim.notify = function(msg, ...)
+  if msg:match("warning: multiple different client offset_encodings") then
+    return
+  end
+  notify(msg, ...)
+end
+
+-- Set wrap for markdown & text files
+vim.api.nvim_create_autocmd('BufEnter', {
+  pattern = {'*.md', '*.txt', '*.mdx'},
+  command = 'setlocal wrap'
+})
+
+-- Configure visual marks plugin
+require"marks".setup {}
+
+-- Plugins
 lvim.plugins = {
-  -- Background opacity
-  "xiyaowong/nvim-transparent",
-  -- Themes
-  "ellisonleao/gruvbox.nvim",
+  -- Color themes 
+  "projekt0n/github-nvim-theme",
+  "sjl/badwolf",
   {
     "mcchrish/zenbones.nvim",
-    requires = "rktjmp/lush.nvim"
+    dependencies = "rktjmp/lush.nvim"
   },
-  {
-    "danielmckinnonanderson/badwolf-nvim",
-    requires = "rktjmp/lush.nvim"
-  },
-}
+  "jnurmine/Zenburn",
 
+  -- Transparent editor background
+  "xiyaowong/transparent.nvim",
+
+  -- Visualize marks in margins
+  "chentoast/marks.nvim",
+
+  -- Github Co-Pilot
+  "github/copilot.vim"
+}
